@@ -204,21 +204,25 @@ pnpm dist:mac    # macOS dmg，必须在 macOS 上执行（electron-builder 不�
 | `dxcompiler.dll` + `d3dcompiler_47.dll` + `vk_swiftshader.dll` | 31.2 MB          | 31.2 MB        | ANGLE / SwiftShader 的 GPU 后备链，缺了部分机器直接黑屏，不动                                                                                                                        |
 | `LICENSES.chromium.html`                                       | 20.0 MB          | 20.0 MB        | Chromium 第三方声明的合规要求，不能删                                                                                                                                                |
 
-剩下 330 MB 里约 235 MB 是 Electron 本体，所以**别指望 `compression: maximum`**（electron-builder 注释原话：doesn't lead to noticeable size difference, but increase build time）。这 88 MB 收益主要是 JS 与 `.pak` 文本，对 Setup.exe 的净压缩收益预计在 20~25 MB 量级（这个数是推算，NSIS 那步要联网取 nsis/7zip 工具链，得在有网络的终端里跑 `pnpm dist:win` 才能实测）。再想小一个数量级只能换框架：Tauri + WebView2 约 10~15 MB 安装包，代价是 main/preload 的 IPC 层用 Rust 重写；而 `out/renderer` 本身只有 2.1 MB，做成纯网页版是更便宜的路线。
+剩下 330 MB 里约 235 MB 是 Electron 本体，所以**别指望 `compression: maximum`**（electron-builder 注释原话：doesn't lead to noticeable size difference, but increase build time）。CI 实测 `id-generator-Setup-1.0.0.exe` = **98.8 MB**（103 622 176 B，默认压缩，NSIS 把 330.3 MB 的 win-unpacked 压掉约 70%）；`compression: maximum` 的净收益仍在 20~25 MB 量级的推算，没实测。再想小一个数量级只能换框架：Tauri + WebView2 约 10~15 MB 安装包，代价是 main/preload 的 IPC 层用 Rust 重写；而 `out/renderer` 本身只有 2.1 MB，做成纯网页版是更便宜的路线。
+
+产物文件名（`artifactName`）**必须纯 ASCII**：electron-builder 会把非 ASCII 字符从产物名里剥掉，`'${productName}-Setup-${version}.${ext}'` 实测得到的文件名是 `-Setup-1.0.0.exe`（中文产品名整段消失，只剩连接符），所以这里写死成 `id-generator-Setup-…`。安装程序显示名、快捷方式名（`nsis.shortcutName` / `uninstallDisplayName`）不受影响，仍是中文。
 
 ## 九、持续集成与自动发版
 
 `.github/workflows/release.yml`：**push 到 `main`（或手动 `workflow_dispatch`）→ 验证 → 双平台打包 → 上传 GitHub Release**。
 
-| 任务      | runner                               | 做什么                                                                                                                                                           |
-| --------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `verify`  | ubuntu-latest                        | `pnpm lint` / `pnpm typecheck` / `pnpm test`。装依赖用 `pnpm install --frozen-lockfile`，Node 24、pnpm 版本读 `packageManager` 字段                              |
-| `build`   | windows-latest、macos-latest（矩阵） | `electron-vite build` + `electron-builder --win nsis` / `--mac dmg`，`--publish never`；typecheck 不在这里重复跑。mac 任务设 `CSC_IDENTITY_AUTO_DISCOVERY=false` |
-| `release` | ubuntu-latest                        | 把两个平台的产物收进一个 Release                                                                                                                                 |
+| 任务      | runner                               | 做什么                                                                                                                                                                                                                      |
+| --------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `verify`  | ubuntu-latest                        | `pnpm lint` / `pnpm typecheck` / `pnpm test`。装依赖用 `pnpm install --frozen-lockfile`，Node 24、pnpm 版本读 `packageManager` 字段                                                                                         |
+| `build`   | windows-latest、macos-latest（矩阵） | `electron-vite build` + `electron-builder --win` / `--mac`（**只给平台旗标，写成 `--mac dmg` 会连带丢掉配置里的 arch**，见下），`--publish never`；typecheck 不在这里重复跑。mac 任务设 `CSC_IDENTITY_AUTO_DISCOVERY=false` |
+| `release` | ubuntu-latest                        | 把两个平台的产物收进一个 Release                                                                                                                                                                                            |
 
 发版口径是**按版本号滚动**：Release tag 取 `package.json` 的 `version`（当前 `v1.0.0`）。tag 不存在就 `gh release create`，已存在就 `gh release upload --clobber` 覆盖安装包、并把 release 的 target 移到本次提交，Notes 里写明构建提交与工作流链接。所以「同一版本反复 push」只会有一份最新安装包；要留住历史版本，先 bump `version` 再合主干。
 
-不需要配任何 secret：上传用的是内置 `GITHUB_TOKEN`，工作流顶部声明 `permissions: contents: write`。产物文件名带中文（`${productName}` 决定），GitHub 的下载 URL 会 percent-encode，浏览器另存下来的文件名正常。
+不需要配任何 secret：上传用的是内置 `GITHUB_TOKEN`，工作流顶部声明 `permissions: contents: write`。产物文件名是纯 ASCII 的 `id-generator-…`（原因见「八、打包」末尾）。
+
+实测结论（首轮 run 38040327771，四个任务全绿）：Release `v1.0.0` 拿到 `id-generator-Setup-1.0.0.exe` 98.8 MB 与 `id-generator-1.0.0-arm64.dmg` 110.6 MB。上面两条——CLI target 吞掉 arch、`${productName}` 进不了产物名——都是这一轮暴露出来后才修掉的，所以**首次发版后要回头核对 Release 的 asset 文件名和个数**，别只看工作流是绿的。
 
 ## 十、已知边界
 

@@ -39,10 +39,12 @@ jobs:
         include:
           - os: windows-latest
             label: Windows
-            builder: --win nsis
+            # 只给平台旗标、不给 target：`--mac dmg` 会整段替换配置里的 mac.target，
+            # 挂在 target 上的 arch: [x64, arm64] 一起被丢掉，结果只出宿主架构那一个 dmg
+            builder: --win
           - os: macos-latest
             label: macOS
-            builder: --mac dmg
+            builder: --mac
     runs-on: ${{ matrix.os }}
     env:
       # 未配置开发者证书：显式关掉自动发现，否则 mac 任务会去钥匙串找签名身份
@@ -103,4 +105,4 @@ jobs:
           fi
           gh release upload "$TAG" "${files[@]}" --clobber
           # 滚动发布：同一个版本被后续 push 覆盖，Release 指向最新一次构建
-          gh release edit "$TAG" --target "$GITHUB_SHA" --notes-file notes.md --latest
+          gh release edit "$TAG" --target "$GITHUB_SHA" --notes-file notes.md

@@ -27,7 +27,9 @@ win:
       arch:
         - x64
   icon: build/icon.png
-  artifactName: '${productName}-Setup-${version}.${ext}'
+  # 产物名必须是纯 ASCII：electron-builder 会把非 ASCII 字符从 artifactName 里剥掉，
+  # 用 ${productName} 实测得到的是「-Setup-1.0.0.exe」这种只剩连接符的文件名
+  artifactName: 'id-generator-Setup-${version}.${ext}'
 
 nsis:
   oneClick: false
@@ -47,7 +49,7 @@ mac:
   category: public.app-category.developer-tools
   # 未配置开发者证书：本地打包产物需要右键「打开」绕过 Gatekeeper
   identity: null
-  artifactName: '${productName}-${version}-${arch}.${ext}'
+  artifactName: 'id-generator-${version}-${arch}.${ext}'
 
 dmg:
   window:
