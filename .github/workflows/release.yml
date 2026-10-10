@@ -104,5 +104,12 @@ jobs:
             exit 1
           fi
           gh release upload "$TAG" "${files[@]}" --clobber
-          # 滚动发布：同一个版本被后续 push 覆盖，Release 指向最新一次构建
+          # 滚动发布：Release 里的产物要正好等于本次构建，改名/换架构留下的旧 asset 清掉
+          gh release view "$TAG" --json assets --jq '.assets[].name' | while read -r name; do
+            if [ ! -e "artifacts/$name" ]; then
+              echo "删除遗留 asset: $name"
+              gh release delete-assets "$TAG" "$name"
+            fi
+          done
+          # 把 Release 的 target 移到最新一次构建的提交
           gh release edit "$TAG" --target "$GITHUB_SHA" --notes-file notes.md

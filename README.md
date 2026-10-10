@@ -218,7 +218,7 @@ pnpm dist:mac    # macOS dmg，必须在 macOS 上执行（electron-builder 不�
 | `build`   | windows-latest、macos-latest（矩阵） | `electron-vite build` + `electron-builder --win` / `--mac`（**只给平台旗标，写成 `--mac dmg` 会连带丢掉配置里的 arch**，见下），`--publish never`；typecheck 不在这里重复跑。mac 任务设 `CSC_IDENTITY_AUTO_DISCOVERY=false` |
 | `release` | ubuntu-latest                        | 把两个平台的产物收进一个 Release                                                                                                                                                                                            |
 
-发版口径是**按版本号滚动**：Release tag 取 `package.json` 的 `version`（当前 `v1.0.0`）。tag 不存在就 `gh release create`，已存在就 `gh release upload --clobber` 覆盖安装包、并把 release 的 target 移到本次提交，Notes 里写明构建提交与工作流链接。所以「同一版本反复 push」只会有一份最新安装包；要留住历史版本，先 bump `version` 再合主干。
+发版口径是**按版本号滚动**：Release tag 取 `package.json` 的 `version`（当前 `v1.0.0`）。tag 不存在就 `gh release create`，已存在就 `gh release upload --clobber` 覆盖安装包、删掉不在本次产物列表里的旧 asset（改名或换架构留下的）、把 release 的 target 移到本次提交，Notes 里写明构建提交与工作流链接。所以「同一版本反复 push」只会有一份最新安装包；要留住历史版本，先 bump `version` 再合主干。
 
 不需要配任何 secret：上传用的是内置 `GITHUB_TOKEN`，工作流顶部声明 `permissions: contents: write`。产物文件名是纯 ASCII 的 `id-generator-…`（原因见「八、打包」末尾）。
 
