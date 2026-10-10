@@ -205,7 +205,9 @@ CI 实测 `id-generator-Setup-1.0.0.exe` = **98.8 MB**（默认压缩）。产�
 | `build`   | windows-latest、macos-latest（矩阵） | `electron-vite build` + `electron-builder --win` / `--mac --publish never`  |
 | `release` | ubuntu-latest                        | 汇总产物并发布 Release                                                      |
 
-发版按版本号滚动：Release tag 取 `package.json` 的 `version`，已存在则 `gh release upload --clobber` 覆盖并把 target 移到本次提交。无需额外 secret，使用内置 `GITHUB_TOKEN`。**同一版本反复 push 只会有一份最新安装包**，要留历史版本请先 bump `version`。
+发版按版本号滚动：Release tag 取 `package.json` 的 `version`，已存在则 `gh release upload --clobber` 覆盖并把 target 移到本次提交。无需额外 secret，使用内置 `GITHUB_TOKEN`。**同一版本反复 push 只会有一份最新安装包**，要留历史版本请先 bump `version`。上传后还会按 asset id 删掉不在本次产物列表里的旧文件（改名或换架构留下的残留，比缺一份更容易误导使用者）。
+
+两个踩过一次的坑：**`build` 命令行只能给平台旗标**，写成 `--mac dmg` 会整段替换配置里的 `mac.target`，而 arch 是挂在 target 条目上的（`arch: [x64, arm64]`），一起被丢掉后就只出宿主架构一个 dmg；**只改文档不会触发发版**（`on.push.paths-ignore: ['**.md']`），macOS runner 的计费分钟数是 Linux 的 10 倍。首轮工作流四个任务全绿但 Release 里的产物名和个数都不对，所以发版后要核对的是 `/releases` 的 asset 列表，不是工作流的状态点。
 
 ## 已知边界
 

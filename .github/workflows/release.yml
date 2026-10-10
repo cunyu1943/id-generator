@@ -4,6 +4,9 @@ name: Release
 on:
   push:
     branches: [main]
+    # 只改文档不必重新出包：macOS runner 的计费分钟数是 Linux 的 10 倍
+    paths-ignore:
+      - '**.md'
   workflow_dispatch:
 
 permissions:
