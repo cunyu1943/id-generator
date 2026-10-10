@@ -1,0 +1,5 @@
+allowBuilds:
+  electron-winstaller: true
+  esbuild: true
+# pnpm 12：onlyBuiltDependencies 已从 package.json 的 "pnpm" 字段迁移到这里。
+# 显式放行需要执行安装脚本的依赖（Electron 下载二进制、esbuild 下载平台可执行文件）。

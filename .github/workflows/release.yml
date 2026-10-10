@@ -1,0 +1,106 @@
+name: Release
+
+# 每次 push 到 main（或手动触发）：验证 → 双平台打包 → 上传到对应版本的 GitHub Release
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  # 发版任务不取消彼此，避免后一次 push 打断正在上传的 Release
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: 验证（lint / typecheck / test）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+
+  build:
+    name: 打包 ${{ matrix.label }}
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            label: Windows
+            builder: --win nsis
+          - os: macos-latest
+            label: macOS
+            builder: --mac dmg
+    runs-on: ${{ matrix.os }}
+    env:
+      # 未配置开发者证书：显式关掉自动发现，否则 mac 任务会去钥匙串找签名身份
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # typecheck 已在 verify 跑过，这里只做 vite 三目标构建，再交给 electron-builder
+      - run: pnpm exec electron-vite build
+      - run: pnpm exec electron-builder ${{ matrix.builder }} --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.os }}
+          path: |
+            release/*.exe
+            release/*.dmg
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: 发布到 GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: 上传安装包
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          VERSION=$(node -p "require('./package.json').version")
+          TAG="v${VERSION}"
+          cat > notes.md <<EOF
+          本工具仅用于 UI 原型演示、测试数据 Mock 与教学示例，生成的图片强制带水印，不包含任何真实公民个人信息。
+
+          - 构建提交：${GITHUB_SHA}
+          - 工作流：${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+          - Windows 安装包未做代码签名，首次运行需在 SmartScreen 里选择「仍要运行」
+          - macOS dmg 未经公证，打开时右键「打开」绕过 Gatekeeper
+          EOF
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --title "身份证演示图生成器 $TAG" --notes-file notes.md --latest
+          fi
+          shopt -s nullglob
+          files=(artifacts/*)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "没有可上传的产物" >&2
+            exit 1
+          fi
+          gh release upload "$TAG" "${files[@]}" --clobber
+          # 滚动发布：同一个版本被后续 push 覆盖，Release 指向最新一次构建
+          gh release edit "$TAG" --target "$GITHUB_SHA" --notes-file notes.md --latest

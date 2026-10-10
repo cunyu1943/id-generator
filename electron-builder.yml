@@ -1,0 +1,55 @@
+# electron-builder 配置：Windows NSIS 安装包 + macOS dmg
+# 只打包 out/：渲染层已由 vite 全量打包，main/preload 只 require electron 与 node: 内置模块，
+# 所以 package.json 里没有 dependencies（有的话会被原样复制进 asar，白搭 40 MB）
+appId: com.demo.idgenerator
+productName: 身份证演示图生成器
+copyright: '© 2026 id-generator'
+
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - 'out/**'
+  - '!**/*.map'
+
+# Electron 自带 55 个 locales/*.pak（49.6 MB）。界面只有简中，留 zh-CN + en-US
+# （en-US 是系统语言非中文时 Chromium 的回退）；要加繁体就往里补 zh-TW。
+electronLanguages:
+  - zh-CN
+  - en-US
+
+asar: true
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: build/icon.png
+  artifactName: '${productName}-Setup-${version}.${ext}'
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  shortcutName: 身份证演示图生成器
+  uninstallDisplayName: 身份证演示图生成器
+
+mac:
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+  icon: build/icon.png
+  category: public.app-category.developer-tools
+  # 未配置开发者证书：本地打包产物需要右键「打开」绕过 Gatekeeper
+  identity: null
+  artifactName: '${productName}-${version}-${arch}.${ext}'
+
+dmg:
+  window:
+    width: 540
+    height: 380

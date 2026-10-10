@@ -1,0 +1,10 @@
+node_modules
+out
+dist
+release
+coverage
+pnpm-lock.yaml
+
+# unplugin-auto-import / unplugin-vue-components 生成，不参与格式化
+src/renderer/src/types/auto-imports.d.ts
+src/renderer/src/types/components.d.ts
